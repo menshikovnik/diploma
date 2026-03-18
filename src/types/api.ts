@@ -2,10 +2,10 @@ export interface UserDto {
   id: number;
   firstName: string;
   lastName: string;
-  middleName: string;
-  groupNumber: string;
+  middleName?: string;
+  groupNumber?: string;
   email: string;
-  phone: string;
+  phone?: string;
 }
 
 export interface IdentifyFoundResponse {
@@ -23,10 +23,7 @@ export type IdentifyResponse = IdentifyFoundResponse | IdentifyNotFoundResponse;
 export interface RegisterPayload {
   firstName: string;
   lastName: string;
-  middleName: string;
-  groupNumber: string;
   email: string;
-  phone: string;
 }
 
 export interface RegisterResponse {

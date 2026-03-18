@@ -7,10 +7,10 @@ class UserDto(BaseModel):
     id: int
     firstName: str
     lastName: str
-    middleName: str
-    groupNumber: str
+    middleName: str | None = None
+    groupNumber: str | None = None
     email: EmailStr
-    phone: str
+    phone: str | None = None
 
 
 class IdentifyFoundResponse(BaseModel):

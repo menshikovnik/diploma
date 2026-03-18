@@ -64,10 +64,7 @@ export const registerUser = async (
   formData.append('file', file, 'face-capture.jpg');
   formData.append('firstName', payload.firstName);
   formData.append('lastName', payload.lastName);
-  formData.append('middleName', payload.middleName);
-  formData.append('groupNumber', payload.groupNumber);
   formData.append('email', payload.email);
-  formData.append('phone', payload.phone);
 
   const response = await fetch(buildUrl('/api/recognition/register'), {
     method: 'POST',

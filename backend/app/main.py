@@ -41,10 +41,10 @@ def to_public_user(user: dict[str, Any]) -> UserDto:
         id=int(user["id"]),
         firstName=str(user["firstName"]),
         lastName=str(user["lastName"]),
-        middleName=str(user["middleName"]),
-        groupNumber=str(user["groupNumber"]),
+        middleName=str(user["middleName"]) if user.get("middleName") else None,
+        groupNumber=str(user["groupNumber"]) if user.get("groupNumber") else None,
         email=str(user["email"]),
-        phone=str(user["phone"]),
+        phone=str(user["phone"]) if user.get("phone") else None,
     )
 
 
@@ -108,10 +108,7 @@ async def register(
     file: UploadFile = File(...),
     firstName: str = Form(...),
     lastName: str = Form(...),
-    middleName: str = Form(...),
-    groupNumber: str = Form(...),
     email: str = Form(...),
-    phone: str = Form(...),
 ) -> RegisterResponse:
     try:
         image_bytes = await read_image(file)
@@ -130,10 +127,7 @@ async def register(
             "id": user_id,
             "firstName": firstName.strip(),
             "lastName": lastName.strip(),
-            "middleName": middleName.strip(),
-            "groupNumber": groupNumber.strip(),
             "email": email.strip(),
-            "phone": phone.strip(),
             "embedding": embedding.tolist(),
             "createdAt": datetime.now(timezone.utc).isoformat(),
         }

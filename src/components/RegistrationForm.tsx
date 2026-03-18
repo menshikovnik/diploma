@@ -11,14 +11,10 @@ type FormErrors = Partial<Record<keyof RegisterPayload, string>>;
 const initialForm: RegisterPayload = {
   firstName: '',
   lastName: '',
-  middleName: '',
-  groupNumber: '',
   email: '',
-  phone: '',
 };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const phonePattern = /^[+]?[0-9()\-\s]{10,20}$/;
 
 export function RegistrationForm({ loading, onSubmit }: RegistrationFormProps) {
   const [form, setForm] = useState<RegisterPayload>(initialForm);
@@ -28,10 +24,7 @@ export function RegistrationForm({ loading, onSubmit }: RegistrationFormProps) {
     () => [
       { key: 'firstName', label: 'Имя', type: 'text' },
       { key: 'lastName', label: 'Фамилия', type: 'text' },
-      { key: 'middleName', label: 'Отчество', type: 'text' },
-      { key: 'groupNumber', label: 'Группа', type: 'text' },
       { key: 'email', label: 'Email', type: 'email' },
-      { key: 'phone', label: 'Телефон', type: 'tel' },
     ] as const,
     [],
   );
@@ -41,10 +34,7 @@ export function RegistrationForm({ loading, onSubmit }: RegistrationFormProps) {
 
     if (!form.firstName.trim()) nextErrors.firstName = 'Введите имя';
     if (!form.lastName.trim()) nextErrors.lastName = 'Введите фамилию';
-    if (!form.middleName.trim()) nextErrors.middleName = 'Введите отчество';
-    if (!form.groupNumber.trim()) nextErrors.groupNumber = 'Введите номер группы';
     if (!emailPattern.test(form.email.trim())) nextErrors.email = 'Введите корректный email';
-    if (!phonePattern.test(form.phone.trim())) nextErrors.phone = 'Введите корректный телефон';
 
     return nextErrors;
   };
@@ -66,10 +56,7 @@ export function RegistrationForm({ loading, onSubmit }: RegistrationFormProps) {
     await onSubmit({
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
-      middleName: form.middleName.trim(),
-      groupNumber: form.groupNumber.trim(),
       email: form.email.trim(),
-      phone: form.phone.trim(),
     });
   };
 
@@ -81,12 +68,12 @@ export function RegistrationForm({ loading, onSubmit }: RegistrationFormProps) {
         </p>
         <h2 className="mt-1 text-xl font-semibold text-ink">Лицо не найдено в системе</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          Заполните данные нового пользователя. Для регистрации будет использован уже
-          захваченный кадр после успешной liveness-проверки.
+          Заполните короткую анкету. Для регистрации будет использован уже захваченный
+          кадр после успешной проверки активности.
         </p>
       </div>
 
-      <form className="grid gap-4 sm:grid-cols-2" onSubmit={handleSubmit}>
+      <form className="grid gap-4" onSubmit={handleSubmit}>
         {fields.map((field) => {
           const error = errors[field.key];
 
@@ -97,6 +84,13 @@ export function RegistrationForm({ loading, onSubmit }: RegistrationFormProps) {
                 type={field.type}
                 value={form[field.key]}
                 onChange={(event) => handleChange(field.key, event.target.value)}
+                autoComplete={
+                  field.key === 'firstName'
+                    ? 'given-name'
+                    : field.key === 'lastName'
+                      ? 'family-name'
+                      : 'email'
+                }
                 className={`w-full rounded-2xl border bg-slate-50 px-4 py-3 text-sm text-ink outline-none transition placeholder:text-slate-400 focus:border-accent focus:bg-white ${
                   error ? 'border-red-300' : 'border-slate-200'
                 }`}
@@ -107,7 +101,7 @@ export function RegistrationForm({ loading, onSubmit }: RegistrationFormProps) {
           );
         })}
 
-        <div className="sm:col-span-2">
+        <div>
           <button
             type="submit"
             disabled={loading}

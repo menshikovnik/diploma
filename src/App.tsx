@@ -266,6 +266,9 @@ const buildPositionHint = (
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const resultSectionRef = useRef<HTMLDivElement>(null);
+  const registrationSectionRef = useRef<HTMLDivElement>(null);
+  const successSectionRef = useRef<HTMLDivElement>(null);
   const detectorRef = useRef<Detector | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -331,6 +334,14 @@ export default function App() {
     ],
     [steps],
   );
+
+  const activeStepKey = useMemo<LivenessStep['key'] | null>(() => {
+    if (!steps.face) return 'face';
+    if (!steps.blink) return 'blink';
+    if (!steps.turnLeft) return 'turnLeft';
+    if (!steps.turnRight) return 'turnRight';
+    return null;
+  }, [steps]);
 
   const clearLiveFeedback = () => {
     setMetrics((current) => ({
@@ -404,6 +415,30 @@ export default function App() {
       detectorRef.current?.dispose();
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.innerWidth >= 1280) {
+      return;
+    }
+
+    const scrollToSection = (element: HTMLDivElement | null) => {
+      if (!element) {
+        return;
+      }
+
+      window.setTimeout(() => {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 120);
+    };
+
+    if (appState === 'user_not_found' || appState === 'register_loading') {
+      scrollToSection(registrationSectionRef.current);
+    } else if (appState === 'user_found' || appState === 'delete_loading') {
+      scrollToSection(resultSectionRef.current);
+    } else if (appState === 'register_success') {
+      scrollToSection(successSectionRef.current);
+    }
+  }, [appState]);
 
   const ensureDetector = async (): Promise<Detector> => {
     if (detectorRef.current) {
@@ -941,6 +976,8 @@ export default function App() {
               positionHint={metrics.positionHint}
               faceStateLabel={metrics.faceStateLabel}
               headDirectionLabel={metrics.headDirectionLabel}
+              steps={stepList}
+              activeStepKey={activeStepKey}
               onStartCamera={handleStartCamera}
               onStopCamera={stopCamera}
               onStartCheck={handleStartCheck}
@@ -949,23 +986,30 @@ export default function App() {
             {(appState === 'user_found' || appState === 'delete_loading') &&
             foundUser &&
             matchScore !== null ? (
-              <UserCard
-                user={foundUser}
-                score={matchScore}
-                deleting={appState === 'delete_loading'}
-                onDelete={handleDeleteUser}
-              />
+              <div ref={resultSectionRef}>
+                <UserCard
+                  user={foundUser}
+                  score={matchScore}
+                  deleting={appState === 'delete_loading'}
+                  onDelete={handleDeleteUser}
+                />
+              </div>
             ) : null}
 
             {appState === 'user_not_found' || appState === 'register_loading' ? (
-              <RegistrationForm
-                loading={appState === 'register_loading'}
-                onSubmit={handleRegister}
-              />
+              <div ref={registrationSectionRef}>
+                <RegistrationForm
+                  loading={appState === 'register_loading'}
+                  onSubmit={handleRegister}
+                />
+              </div>
             ) : null}
 
             {appState === 'register_success' ? (
-              <section className="rounded-[28px] border border-emerald-200 bg-emerald-50 p-5 shadow-panel xl:p-6">
+              <section
+                ref={successSectionRef}
+                className="rounded-[28px] border border-emerald-200 bg-emerald-50 p-5 shadow-panel xl:p-6"
+              >
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">
                   Регистрация
                 </p>

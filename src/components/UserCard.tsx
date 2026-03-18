@@ -11,10 +11,7 @@ const rows = (user: UserDto, score: number) => [
   { label: 'ID', value: user.id.toString() },
   { label: 'Имя', value: user.firstName },
   { label: 'Фамилия', value: user.lastName },
-  { label: 'Отчество', value: user.middleName },
-  { label: 'Группа', value: user.groupNumber },
   { label: 'Email', value: user.email },
-  { label: 'Телефон', value: user.phone },
   { label: 'Оценка совпадения', value: score.toFixed(2) },
 ];
 

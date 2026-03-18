@@ -14,6 +14,12 @@ interface CameraPanelProps {
   positionHint?: string;
   faceStateLabel: string;
   headDirectionLabel: string;
+  steps: Array<{
+    key: string;
+    title: string;
+    done: boolean;
+  }>;
+  activeStepKey: string | null;
   onStartCamera: () => void;
   onStopCamera: () => void;
   onStartCheck: () => void;
@@ -33,6 +39,8 @@ export function CameraPanel({
   positionHint,
   faceStateLabel,
   headDirectionLabel,
+  steps,
+  activeStepKey,
   onStartCamera,
   onStopCamera,
   onStartCheck,
@@ -139,6 +147,30 @@ export function CameraPanel({
             {checkingActive ? 'Проверка идет' : cameraActive ? 'Камера активна' : 'Ожидание запуска'}
           </div>
         </div>
+      </div>
+
+      <div className="-mx-1 mt-4 flex gap-2 overflow-x-auto px-1 pb-1 xl:hidden">
+        {steps.map((step, index) => {
+          const isActive = activeStepKey === step.key;
+
+          return (
+            <div
+              key={step.key}
+              className={`min-w-[132px] rounded-2xl border px-3 py-3 transition ${
+                step.done
+                  ? 'border-emerald-200 bg-emerald-50'
+                  : isActive
+                    ? 'border-teal-200 bg-teal-50'
+                    : 'border-slate-200 bg-slate-50'
+              }`}
+            >
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Шаг {index + 1}
+              </div>
+              <div className="mt-1 text-sm font-semibold text-ink">{step.title}</div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="mt-5 grid gap-3 sm:flex sm:flex-wrap">
