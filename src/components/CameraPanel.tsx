@@ -19,7 +19,6 @@ interface CameraPanelProps {
     title: string;
     done: boolean;
   }>;
-  activeStepKey: string | null;
   onStartCamera: () => void;
   onStopCamera: () => void;
   onStartCheck: () => void;
@@ -40,7 +39,6 @@ export function CameraPanel({
   faceStateLabel,
   headDirectionLabel,
   steps,
-  activeStepKey,
   onStartCamera,
   onStopCamera,
   onStartCheck,
@@ -52,7 +50,7 @@ export function CameraPanel({
       : 'border-white/40 shadow-[0_0_0_1px_rgba(255,255,255,0.12)]';
 
   return (
-    <section className="rounded-[24px] border border-slate-200/70 bg-white/90 p-4 shadow-panel backdrop-blur sm:rounded-[28px] sm:p-5 xl:p-6">
+    <section className="rounded-[24px] border border-slate-200/70 bg-white/95 p-4 shadow-panel backdrop-blur sm:rounded-[28px] sm:p-5 xl:p-6">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -67,7 +65,7 @@ export function CameraPanel({
         </div>
       </div>
 
-      <div className="relative aspect-[3/4] overflow-hidden rounded-[24px] bg-slate-950 sm:aspect-[4/3]">
+      <div className="relative aspect-[4/5] overflow-hidden rounded-[22px] bg-slate-950 sm:aspect-[4/3]">
         <video
           ref={videoRef}
           autoPlay
@@ -96,7 +94,7 @@ export function CameraPanel({
         </div>
 
         <div className="absolute inset-x-3 top-3 flex items-start justify-between gap-2 sm:inset-x-5 sm:top-5 sm:gap-3">
-          <div className="max-w-[72%] rounded-2xl border border-white/10 bg-slate-950/45 px-3 py-2.5 backdrop-blur-md sm:max-w-[70%] sm:px-4 sm:py-3">
+          <div className="max-w-[82%] rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-2.5 backdrop-blur-md sm:max-w-[70%] sm:px-4 sm:py-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal-200/90">
               Инструкция
             </div>
@@ -132,7 +130,7 @@ export function CameraPanel({
         ) : null}
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-3 min-[420px]:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
           <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Состояние лица</div>
           <div className="mt-1 text-sm font-semibold text-ink">{faceStateLabel}</div>
@@ -149,31 +147,25 @@ export function CameraPanel({
         </div>
       </div>
 
-      <div className="-mx-1 mt-4 flex gap-2 overflow-x-auto px-1 pb-1 xl:hidden">
-        {steps.map((step, index) => {
-          const isActive = activeStepKey === step.key;
-
-          return (
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 xl:hidden">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          Шаги проверки
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {steps.map((step, index) => (
             <div
               key={step.key}
-              className={`min-w-[132px] rounded-2xl border px-3 py-3 transition ${
-                step.done
-                  ? 'border-emerald-200 bg-emerald-50'
-                  : isActive
-                    ? 'border-teal-200 bg-teal-50'
-                    : 'border-slate-200 bg-slate-50'
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                step.done ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-600'
               }`}
             >
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Шаг {index + 1}
-              </div>
-              <div className="mt-1 text-sm font-semibold text-ink">{step.title}</div>
+              {index + 1}. {step.title}
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:flex sm:flex-wrap">
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <button
           type="button"
           onClick={onStartCamera}

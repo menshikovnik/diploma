@@ -335,14 +335,6 @@ export default function App() {
     [steps],
   );
 
-  const activeStepKey = useMemo<LivenessStep['key'] | null>(() => {
-    if (!steps.face) return 'face';
-    if (!steps.blink) return 'blink';
-    if (!steps.turnLeft) return 'turnLeft';
-    if (!steps.turnRight) return 'turnRight';
-    return null;
-  }, [steps]);
-
   const clearLiveFeedback = () => {
     setMetrics((current) => ({
       ...current,
@@ -417,24 +409,25 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || window.innerWidth >= 1280) {
+    if (typeof window === 'undefined') {
       return;
     }
 
-    const scrollToSection = (element: HTMLDivElement | null) => {
+    const scrollToSection = (element: HTMLDivElement | null, topOffset = 20) => {
       if (!element) {
         return;
       }
 
       window.setTimeout(() => {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 120);
+        const top = element.getBoundingClientRect().top + window.scrollY - topOffset;
+        window.scrollTo({ top, behavior: 'smooth' });
+      }, 180);
     };
 
-    if (appState === 'user_not_found' || appState === 'register_loading') {
-      scrollToSection(registrationSectionRef.current);
-    } else if (appState === 'user_found' || appState === 'delete_loading') {
+    if (appState === 'user_found') {
       scrollToSection(resultSectionRef.current);
+    } else if (appState === 'user_not_found') {
+      scrollToSection(registrationSectionRef.current);
     } else if (appState === 'register_success') {
       scrollToSection(successSectionRef.current);
     }
@@ -943,21 +936,25 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 bg-grid px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] text-ink sm:px-6 sm:py-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        <header className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-[radial-gradient(circle_at_top_left,_rgba(15,118,110,0.22),_transparent_36%),linear-gradient(135deg,_#ffffff_0%,_#f8fafc_45%,_#ecfeff_100%)] p-4 shadow-panel sm:rounded-[32px] sm:p-8">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f5f7fb_0%,#eef7f6_42%,#f8fafc_100%)] px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] text-ink sm:px-5 sm:py-5 lg:px-8">
+      <div className="mx-auto max-w-6xl">
+        <header className="overflow-hidden rounded-[26px] border border-slate-200/80 bg-[radial-gradient(circle_at_top_left,_rgba(13,148,136,0.18),_transparent_35%),linear-gradient(135deg,_#ffffff_0%,_#f7fbfb_45%,_#eef7f6_100%)] px-4 py-5 shadow-panel sm:rounded-[30px] sm:px-7 sm:py-7">
           <div className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-teal-700/80 sm:text-xs">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-teal-700/80">
               Биометрическая система
             </p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink sm:text-5xl">
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink sm:text-4xl">
               Система биометрической идентификации по лицу
             </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+              Запустите камеру, пройдите короткую проверку активности и система автоматически
+              прокрутит экран к результату распознавания или регистрации.
+            </p>
           </div>
         </header>
 
-        <main className="mt-4 grid gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-[1.35fr_0.9fr]">
-          <div className="space-y-6">
+        <main className="mt-4 grid gap-4 sm:mt-5 sm:gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.78fr)] xl:items-start">
+          <div className="space-y-4 sm:space-y-5">
             <CameraPanel
               videoRef={videoRef}
               cameraActive={Boolean(streamRef.current)}
@@ -977,7 +974,6 @@ export default function App() {
               faceStateLabel={metrics.faceStateLabel}
               headDirectionLabel={metrics.headDirectionLabel}
               steps={stepList}
-              activeStepKey={activeStepKey}
               onStartCamera={handleStartCamera}
               onStopCamera={stopCamera}
               onStartCheck={handleStartCheck}
@@ -986,7 +982,7 @@ export default function App() {
             {(appState === 'user_found' || appState === 'delete_loading') &&
             foundUser &&
             matchScore !== null ? (
-              <div ref={resultSectionRef}>
+              <div ref={resultSectionRef} className="scroll-mt-5">
                 <UserCard
                   user={foundUser}
                   score={matchScore}
@@ -997,7 +993,7 @@ export default function App() {
             ) : null}
 
             {appState === 'user_not_found' || appState === 'register_loading' ? (
-              <div ref={registrationSectionRef}>
+              <div ref={registrationSectionRef} className="scroll-mt-5">
                 <RegistrationForm
                   loading={appState === 'register_loading'}
                   onSubmit={handleRegister}
@@ -1008,7 +1004,7 @@ export default function App() {
             {appState === 'register_success' ? (
               <section
                 ref={successSectionRef}
-                className="rounded-[28px] border border-emerald-200 bg-emerald-50 p-5 shadow-panel xl:p-6"
+                className="scroll-mt-5 rounded-[24px] border border-emerald-200 bg-[linear-gradient(180deg,#ecfdf5_0%,#f8fffb_100%)] p-5 shadow-panel"
               >
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">
                   Регистрация
@@ -1021,7 +1017,7 @@ export default function App() {
             ) : null}
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4 xl:sticky xl:top-5">
             <LivenessStatus
               appState={appState}
               statusMessage={statusMessage}

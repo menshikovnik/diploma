@@ -61,9 +61,9 @@ export function RegistrationForm({ loading, onSubmit }: RegistrationFormProps) {
   };
 
   return (
-    <section className="rounded-[28px] border border-slate-200/70 bg-white/90 p-5 shadow-panel backdrop-blur xl:p-6">
+    <section className="rounded-[24px] border border-amber-200/80 bg-[linear-gradient(180deg,#fffdf7_0%,#ffffff_100%)] p-5 shadow-panel xl:p-6">
       <div className="mb-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-700">
           Регистрация
         </p>
         <h2 className="mt-1 text-xl font-semibold text-ink">Лицо не найдено в системе</h2>
@@ -73,12 +73,13 @@ export function RegistrationForm({ loading, onSubmit }: RegistrationFormProps) {
         </p>
       </div>
 
-      <form className="grid gap-4" onSubmit={handleSubmit}>
+      <form className="grid gap-4 sm:grid-cols-2" onSubmit={handleSubmit}>
         {fields.map((field) => {
           const error = errors[field.key];
+          const fullWidth = field.key === 'email';
 
           return (
-            <label key={field.key} className="block">
+            <label key={field.key} className={`block ${fullWidth ? 'sm:col-span-2' : ''}`}>
               <span className="mb-2 block text-sm font-medium text-slate-700">{field.label}</span>
               <input
                 type={field.type}
@@ -101,7 +102,7 @@ export function RegistrationForm({ loading, onSubmit }: RegistrationFormProps) {
           );
         })}
 
-        <div>
+        <div className="sm:col-span-2">
           <button
             type="submit"
             disabled={loading}

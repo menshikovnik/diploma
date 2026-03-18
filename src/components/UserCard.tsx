@@ -17,8 +17,8 @@ const rows = (user: UserDto, score: number) => [
 
 export function UserCard({ user, score, deleting, onDelete }: UserCardProps) {
   return (
-    <section className="rounded-[28px] border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-panel xl:p-6">
-      <div className="mb-5 flex items-start justify-between gap-3">
+    <section className="rounded-[24px] border border-emerald-200 bg-[linear-gradient(180deg,#ecfdf5_0%,#ffffff_100%)] p-5 shadow-panel xl:p-6">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">
             Результат
@@ -34,17 +34,17 @@ export function UserCard({ user, score, deleting, onDelete }: UserCardProps) {
         {rows(user, score).map((row) => (
           <div key={row.label} className="rounded-2xl border border-emerald-100 bg-white/90 px-4 py-3">
             <div className="text-xs uppercase tracking-[0.18em] text-slate-500">{row.label}</div>
-            <div className="mt-1 text-sm font-semibold text-ink">{row.value}</div>
+            <div className="mt-1 break-words text-sm font-semibold text-ink">{row.value}</div>
           </div>
         ))}
       </div>
 
-      <div className="mt-5 flex justify-end">
+      <div className="mt-5">
         <button
           type="button"
           onClick={onDelete}
           disabled={deleting}
-          className="min-h-11 rounded-2xl border border-rose-200 bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:border-rose-100 disabled:bg-rose-300"
+          className="min-h-11 w-full rounded-2xl border border-rose-200 bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:border-rose-100 disabled:bg-rose-300 sm:w-auto"
         >
           {deleting ? 'Удаление...' : 'Удалить себя из базы'}
         </button>
