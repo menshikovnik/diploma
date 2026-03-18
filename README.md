@@ -65,6 +65,25 @@ VITE_API_BASE_URL=http://localhost:8000
 npm run dev
 ```
 
+### Запуск через Docker
+
+Из корня проекта:
+
+```bash
+docker compose up --build -d
+```
+
+После запуска:
+
+- frontend: `http://localhost:5173`
+- backend: `http://localhost:8000`
+
+Остановить сервисы:
+
+```bash
+docker compose down
+```
+
 ## Backend
 
 Backend реализует:

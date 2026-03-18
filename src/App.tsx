@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection';
 import { CameraPanel } from './components/CameraPanel';
 import { LivenessStatus, type LivenessStep } from './components/LivenessStatus';
 import { RegistrationForm } from './components/RegistrationForm';
@@ -22,8 +21,25 @@ type AppState =
   | 'error';
 
 type StepState = Record<'face' | 'blink' | 'turnLeft' | 'turnRight', boolean>;
-type Detector = faceLandmarksDetection.FaceLandmarksDetector;
 type ActiveStage = 'center' | 'blink' | 'turnLeft' | 'turnRight' | 'complete';
+type Keypoint = { x: number; y: number; z?: number; name?: string };
+type FaceEstimate = { keypoints: Keypoint[] };
+type Detector = {
+  estimateFaces: (input: HTMLVideoElement, config?: { flipHorizontal?: boolean }) => Promise<FaceEstimate[]>;
+  dispose: () => void;
+};
+
+declare global {
+  interface Window {
+    FaceMesh?: new (config?: { locateFile?: (path: string, prefix?: string) => string }) => {
+      setOptions: (options: Record<string, unknown>) => void;
+      onResults: (callback: (results: { multiFaceLandmarks?: Array<Array<{ x: number; y: number; z: number }>> }) => void) => void;
+      send: (input: { image: HTMLVideoElement }) => Promise<void>;
+      close: () => void;
+      initialize?: () => Promise<void>;
+    };
+  }
+}
 
 interface LiveMetrics {
   yaw: number;
@@ -63,13 +79,109 @@ const BLINK_CLOSE_RATIO = 0.86;
 const BLINK_REOPEN_RATIO = 0.94;
 const BLINK_MIN_DROP = 0.045;
 
+class BrowserFaceMeshDetector implements Detector {
+  private constructor(
+    private readonly faceMesh: NonNullable<Window['FaceMesh']> extends new (...args: never[]) => infer T ? T : never,
+  ) {}
+
+  private faces: FaceEstimate[] = [];
+
+  static async create(): Promise<BrowserFaceMeshDetector> {
+    if (!window.FaceMesh) {
+      await new Promise<void>((resolve, reject) => {
+        const existingScript = document.querySelector<HTMLScriptElement>(
+          'script[data-mediapipe-face-mesh="true"]',
+        );
+
+        if (existingScript) {
+          existingScript.addEventListener('load', () => resolve(), { once: true });
+          existingScript.addEventListener(
+            'error',
+            () => reject(new Error('Не удалось загрузить runtime MediaPipe FaceMesh.')),
+            { once: true },
+          );
+          if (window.FaceMesh) {
+            resolve();
+          }
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = '/mediapipe/face_mesh/face_mesh.js';
+        script.async = true;
+        script.dataset.mediapipeFaceMesh = 'true';
+        script.onload = () => resolve();
+        script.onerror = () =>
+          reject(new Error('Не удалось загрузить runtime MediaPipe FaceMesh.'));
+        document.head.appendChild(script);
+      });
+    }
+
+    if (!window.FaceMesh) {
+      throw new Error('FaceMesh runtime не инициализировался в браузере.');
+    }
+
+    const faceMesh = new window.FaceMesh({
+      locateFile: (path: string) => `/mediapipe/face_mesh/${path}`,
+    });
+
+    const detector = new BrowserFaceMeshDetector(faceMesh);
+    faceMesh.setOptions({
+      refineLandmarks: true,
+      selfieMode: false,
+      maxNumFaces: 2,
+    });
+    faceMesh.onResults((results) => {
+      detector.faces =
+        results.multiFaceLandmarks?.map((landmarks) => ({
+          keypoints: landmarks.map((landmark) => ({
+            x: landmark.x * detector.width,
+            y: landmark.y * detector.height,
+            z: landmark.z * detector.width,
+          })),
+        })) ?? [];
+    });
+
+    if (typeof faceMesh.initialize === 'function') {
+      await faceMesh.initialize();
+    }
+
+    return detector;
+  }
+
+  private width = 0;
+  private height = 0;
+  private selfieMode = false;
+
+  async estimateFaces(
+    input: HTMLVideoElement,
+    config?: { flipHorizontal?: boolean },
+  ): Promise<FaceEstimate[]> {
+    this.width = input.videoWidth;
+    this.height = input.videoHeight;
+
+    const shouldMirror = Boolean(config?.flipHorizontal);
+    if (shouldMirror !== this.selfieMode) {
+      this.selfieMode = shouldMirror;
+      this.faceMesh.setOptions({ selfieMode: this.selfieMode });
+    }
+
+    await this.faceMesh.send({ image: input });
+    return this.faces;
+  }
+
+  dispose() {
+    this.faceMesh.close();
+  }
+}
+
 const getDistance = (
-  pointA: faceLandmarksDetection.Keypoint,
-  pointB: faceLandmarksDetection.Keypoint,
+  pointA: Keypoint,
+  pointB: Keypoint,
 ) => Math.hypot(pointA.x - pointB.x, pointA.y - pointB.y);
 
 const getEyeAspectRatio = (
-  keypoints: faceLandmarksDetection.Keypoint[],
+  keypoints: Keypoint[],
   indices: readonly [number, number, number, number, number, number],
 ) => {
   const [leftCorner, topInner, topOuter, rightCorner, bottomInner, bottomOuter] = indices;
@@ -106,7 +218,7 @@ const captureFrame = async (video: HTMLVideoElement): Promise<Blob> =>
   });
 
 const buildPositionHint = (
-  keypoints: faceLandmarksDetection.Keypoint[],
+  keypoints: Keypoint[],
   video: HTMLVideoElement,
   yaw: number,
 ): string => {
@@ -301,15 +413,7 @@ export default function App() {
     setLoadingModels(true);
 
     try {
-      const detector = await faceLandmarksDetection.createDetector(
-        faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
-        {
-          runtime: 'mediapipe',
-          refineLandmarks: true,
-          maxFaces: 2,
-          solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh',
-        },
-      );
+      const detector = await BrowserFaceMeshDetector.create();
       detectorRef.current = detector;
       return detector;
     } finally {
@@ -325,6 +429,10 @@ export default function App() {
       setStatusMessage('Запрашиваем доступ к веб-камере...');
       setCurrentPrompt('Подготовка камеры');
       setLiveHint('Разрешите браузеру доступ к webcam.');
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('Браузер не предоставляет доступ к камере в текущем контексте.');
+      }
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {

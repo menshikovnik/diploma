@@ -77,9 +77,9 @@ class FaceEngine:
         if self._is_invalid_model_file(self.yunet_model_path):
             self._download_model(self.yunet_model_url, self.yunet_model_path)
 
-        if not self.backbone_weights_path.exists():
+        if self._is_invalid_model_file(self.backbone_weights_path):
             raise FaceEngineError(
-                f"Не найден файл весов модели: {self.backbone_weights_path}"
+                f"Не найден или некорректно загружен файл весов модели: {self.backbone_weights_path}"
             )
 
         if self.detector is None:
