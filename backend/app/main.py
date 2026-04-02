@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+from .anti_spoof import AntiSpoofError, SilentFaceAntiSpoofing, SpoofDetectedError
 from .config import get_settings
 from .face_engine import FaceCountError, FaceEngine, FaceEngineError, InvalidImageError
 from .schemas import (
@@ -24,6 +25,11 @@ engine = FaceEngine(
     model_dir=settings.model_dir,
     yunet_model_url=settings.yunet_model_url,
     match_threshold=settings.match_threshold,
+)
+anti_spoof = SilentFaceAntiSpoofing(
+    model_dir=settings.model_dir / "anti_spoof",
+    threshold=settings.anti_spoof_threshold,
+    min_real_frames=settings.anti_spoof_min_real_frames,
 )
 
 app = FastAPI(title="Biometric Face Recognition Service", version="0.1.0")
@@ -55,6 +61,12 @@ async def read_image(upload: UploadFile) -> bytes:
     return content
 
 
+async def read_images(files: list[UploadFile]) -> list[bytes]:
+    if not files:
+        raise HTTPException(status_code=400, detail="Кадры не переданы.")
+    return [await read_image(file) for file in files]
+
+
 def raise_api_error(message: str, status_code: int = 400) -> None:
     raise HTTPException(status_code=status_code, detail=message)
 
@@ -62,6 +74,8 @@ def raise_api_error(message: str, status_code: int = 400) -> None:
 @app.on_event("startup")
 def on_startup() -> None:
     storage.ensure_ready()
+    anti_spoof.ensure_ready()
+    engine.ensure_ready()
 
 
 @app.get("/api/health", response_model=HealthResponse)
@@ -77,10 +91,11 @@ def health() -> HealthResponse:
     "/api/recognition/identify",
     response_model=IdentifyFoundResponse | IdentifyNotFoundResponse,
 )
-async def identify(file: UploadFile = File(...)) -> IdentifyFoundResponse | IdentifyNotFoundResponse:
+async def identify(files: list[UploadFile] = File(...)) -> IdentifyFoundResponse | IdentifyNotFoundResponse:
     try:
-        image_bytes = await read_image(file)
-        embedding = engine.extract_embedding(image_bytes)
+        frames = await read_images(files)
+        anti_spoof.predict(frames)
+        embedding = engine.extract_embedding_from_frames(frames)
         users = storage.list_users()
         match = engine.find_best_match(embedding, users)
 
@@ -97,6 +112,10 @@ async def identify(file: UploadFile = File(...)) -> IdentifyFoundResponse | Iden
         raise_api_error(str(exc), 400)
     except InvalidImageError as exc:
         raise_api_error(str(exc), 400)
+    except SpoofDetectedError as exc:
+        raise_api_error(str(exc), 403)
+    except AntiSpoofError as exc:
+        raise_api_error(str(exc), 500)
     except FaceEngineError as exc:
         raise_api_error(str(exc), 500)
     except Exception as exc:
@@ -105,14 +124,15 @@ async def identify(file: UploadFile = File(...)) -> IdentifyFoundResponse | Iden
 
 @app.post("/api/recognition/register", response_model=RegisterResponse)
 async def register(
-    file: UploadFile = File(...),
+    files: list[UploadFile] = File(...),
     firstName: str = Form(...),
     lastName: str = Form(...),
     email: str = Form(...),
 ) -> RegisterResponse:
     try:
-        image_bytes = await read_image(file)
-        embedding = engine.extract_embedding(image_bytes)
+        frames = await read_images(files)
+        anti_spoof.predict(frames)
+        embedding = engine.extract_embedding_from_frames(frames)
         users = storage.list_users()
         duplicate = engine.find_best_match(embedding, users)
 
@@ -145,6 +165,10 @@ async def register(
         raise_api_error(str(exc), 400)
     except InvalidImageError as exc:
         raise_api_error(str(exc), 400)
+    except SpoofDetectedError as exc:
+        raise_api_error(str(exc), 403)
+    except AntiSpoofError as exc:
+        raise_api_error(str(exc), 500)
     except FaceEngineError as exc:
         raise_api_error(str(exc), 500)
     except Exception as exc:

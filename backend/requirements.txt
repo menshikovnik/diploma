@@ -11,3 +11,4 @@ facenet-pytorch==2.6.0
 pillow==10.2.0
 requests==2.32.5
 tqdm==4.67.3
+uniface==3.3.0

@@ -13,6 +13,8 @@ class Settings:
     app_port: int
     cors_origins: list[str]
     match_threshold: float
+    anti_spoof_threshold: float
+    anti_spoof_min_real_frames: int
     data_dir: Path
     model_dir: Path
     yunet_model_url: str
@@ -46,6 +48,8 @@ def get_settings() -> Settings:
             )
         ),
         match_threshold=float(os.getenv("MATCH_THRESHOLD", "0.363")),
+        anti_spoof_threshold=float(os.getenv("ANTI_SPOOF_THRESHOLD", "0.95")),
+        anti_spoof_min_real_frames=int(os.getenv("ANTI_SPOOF_MIN_REAL_FRAMES", "3")),
         data_dir=data_dir,
         model_dir=model_dir,
         yunet_model_url=os.getenv(

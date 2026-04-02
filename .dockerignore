@@ -1,10 +1,14 @@
-node_modules
-dist
 .git
 .gitignore
 .DS_Store
 *.log
 .env
+frontend/node_modules
+frontend/dist
+frontend/.env
+frontend/certs/dev-cert.pem
+frontend/certs/dev-key.pem
+frontend/certs/rootCA.pem
 backend/.env
 backend/.venv
 backend/__pycache__

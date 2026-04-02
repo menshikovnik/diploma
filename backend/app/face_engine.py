@@ -168,6 +168,18 @@ class FaceEngine:
 
         return embedding / norm
 
+    def extract_embedding_from_frames(self, frames: list[bytes]) -> np.ndarray:
+        if not frames:
+            raise FaceEngineError("Не переданы кадры для распознавания.")
+
+        embeddings = [self.extract_embedding(frame) for frame in frames]
+        stacked = np.stack(embeddings, axis=0)
+        averaged = np.mean(stacked, axis=0).astype(np.float32)
+        norm = np.linalg.norm(averaged)
+        if norm <= 0:
+            raise FaceEngineError("Не удалось получить корректный усредненный embedding.")
+        return averaged / norm
+
     def find_best_match(self, probe_embedding: np.ndarray, users: list[dict]) -> MatchResult:
         self.ensure_ready()
 
