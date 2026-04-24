@@ -19,7 +19,10 @@ type AppState =
   | 'error';
 
 type Detector = {
-  estimateFaces: (input: HTMLVideoElement, config?: { flipHorizontal?: boolean }) => Promise<FaceEstimate[]>;
+  estimateFaces: (
+    input: HTMLVideoElement | HTMLCanvasElement,
+    config?: { flipHorizontal?: boolean },
+  ) => Promise<FaceEstimate[]>;
   dispose: () => Promise<void> | void;
 };
 type Keypoint = { x: number; y: number; z?: number };
@@ -38,7 +41,7 @@ declare global {
     FaceDetection?: new (config?: { locateFile?: (path: string, prefix?: string) => string }) => {
       setOptions: (options: Record<string, unknown>) => void;
       onResults: (callback: (results: { detections?: Array<{ boundingBox: { xCenter: number; yCenter: number; width: number; height: number }; landmarks?: Array<{ x: number; y: number; z: number }> }> }) => void) => void;
-      send: (input: { image: HTMLVideoElement }) => Promise<void>;
+      send: (input: { image: HTMLVideoElement | HTMLCanvasElement }) => Promise<void>;
       close: () => Promise<void>;
       initialize?: () => Promise<void>;
     };
@@ -61,8 +64,11 @@ const STATUS_DEFAULT =
   'Запустите камеру. Поместите лицо в овал, и система сама отберет серию качественных кадров для проверки.';
 
 const STABLE_FRAME_THRESHOLD = 10;
-const CAPTURE_COUNT = 5;
+const CAPTURE_COUNT = 3;
 const CAPTURE_DELAY_MS = 140;
+const DETECTION_INPUT_MAX_WIDTH = 640;
+const CAPTURE_MAX_WIDTH = 720;
+const CAPTURE_JPEG_QUALITY = 0.82;
 
 class BrowserFaceDetectionDetector implements Detector {
   private constructor(
@@ -117,7 +123,7 @@ class BrowserFaceDetectionDetector implements Detector {
     runtime.setOptions({
       model: 'short',
       selfieMode: false,
-      minDetectionConfidence: 0.7,
+      minDetectionConfidence: 0.55,
     });
 
     const detector = new BrowserFaceDetectionDetector(runtime);
@@ -146,11 +152,11 @@ class BrowserFaceDetectionDetector implements Detector {
   private selfieMode = false;
 
   async estimateFaces(
-    input: HTMLVideoElement,
+    input: HTMLVideoElement | HTMLCanvasElement,
     config?: { flipHorizontal?: boolean },
   ): Promise<FaceEstimate[]> {
-    this.width = input.videoWidth;
-    this.height = input.videoHeight;
+    this.width = input instanceof HTMLVideoElement ? input.videoWidth : input.width;
+    this.height = input instanceof HTMLVideoElement ? input.videoHeight : input.height;
 
     const shouldMirror = Boolean(config?.flipHorizontal);
     if (shouldMirror !== this.selfieMode) {
@@ -169,23 +175,93 @@ class BrowserFaceDetectionDetector implements Detector {
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
+const getSourceSize = (source: HTMLVideoElement | HTMLCanvasElement) => {
+  if (source instanceof HTMLVideoElement) {
+    return {
+      width: source.videoWidth,
+      height: source.videoHeight,
+    };
+  }
+
+  return {
+    width: source.width,
+    height: source.height,
+  };
+};
+
+const prepareDetectionFrame = (
+  video: HTMLVideoElement,
+  canvas: HTMLCanvasElement,
+): HTMLCanvasElement => {
+  const scale = Math.min(1, DETECTION_INPUT_MAX_WIDTH / video.videoWidth);
+  canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+  canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+
+  const context = canvas.getContext('2d', { willReadFrequently: false });
+  if (!context) {
+    return canvas;
+  }
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.filter = 'brightness(0.9) contrast(1.12) saturate(0.96)';
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  context.filter = 'none';
+
+  return canvas;
+};
+
+const measureExposure = (
+  video: HTMLVideoElement,
+  canvas: HTMLCanvasElement,
+): { tooBright: boolean; tooDark: boolean } => {
+  canvas.width = 96;
+  canvas.height = Math.max(1, Math.round((video.videoHeight / video.videoWidth) * canvas.width));
+
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) {
+    return { tooBright: false, tooDark: false };
+  }
+
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+  let brightPixels = 0;
+  let darkPixels = 0;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const luma = data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722;
+    if (luma > 238) {
+      brightPixels += 1;
+    } else if (luma < 28) {
+      darkPixels += 1;
+    }
+  }
+
+  const pixels = data.length / 4;
+  return {
+    tooBright: brightPixels / pixels > 0.22,
+    tooDark: darkPixels / pixels > 0.38,
+  };
+};
+
 const getAbsoluteBoundingBox = (
   face: FaceEstimate,
-  video: HTMLVideoElement,
+  source: HTMLVideoElement | HTMLCanvasElement,
   margin = 0,
 ) => {
+  const sourceSize = getSourceSize(source);
   const { xCenter, yCenter, width, height } = face.boundingBox;
-  const boxWidth = width * video.videoWidth;
-  const boxHeight = height * video.videoHeight;
+  const boxWidth = width * sourceSize.width;
+  const boxHeight = height * sourceSize.height;
   const expandedWidth = boxWidth * (1 + margin * 2);
   const expandedHeight = boxHeight * (1 + margin * 2);
-  const centerX = xCenter * video.videoWidth;
-  const centerY = yCenter * video.videoHeight;
+  const centerX = xCenter * sourceSize.width;
+  const centerY = yCenter * sourceSize.height;
 
   const left = Math.max(0, centerX - expandedWidth / 2);
   const top = Math.max(0, centerY - expandedHeight / 2);
-  const right = Math.min(video.videoWidth, centerX + expandedWidth / 2);
-  const bottom = Math.min(video.videoHeight, centerY + expandedHeight / 2);
+  const right = Math.min(sourceSize.width, centerX + expandedWidth / 2);
+  const bottom = Math.min(sourceSize.height, centerY + expandedHeight / 2);
 
   return {
     x: Math.round(left),
@@ -198,8 +274,9 @@ const getAbsoluteBoundingBox = (
 const captureFrame = async (video: HTMLVideoElement): Promise<Blob> =>
   new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    const scale = Math.min(1, CAPTURE_MAX_WIDTH / video.videoWidth);
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
 
     const context = canvas.getContext('2d');
     if (!context) {
@@ -207,7 +284,11 @@ const captureFrame = async (video: HTMLVideoElement): Promise<Blob> =>
       return;
     }
 
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.filter = 'brightness(0.93) contrast(1.08)';
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    context.filter = 'none';
 
     canvas.toBlob((blob) => {
       if (!blob) {
@@ -215,15 +296,19 @@ const captureFrame = async (video: HTMLVideoElement): Promise<Blob> =>
         return;
       }
       resolve(blob);
-    }, 'image/jpeg', 0.92);
+    }, 'image/jpeg', CAPTURE_JPEG_QUALITY);
   });
 
-const buildFrameAssessment = (face: FaceEstimate, video: HTMLVideoElement): FrameAssessment => {
-  const bbox = getAbsoluteBoundingBox(face, video, 0);
-  const centerXRatio = (bbox.x + bbox.width / 2) / video.videoWidth;
-  const centerYRatio = (bbox.y + bbox.height / 2) / video.videoHeight;
-  const widthRatio = bbox.width / video.videoWidth;
-  const heightRatio = bbox.height / video.videoHeight;
+const buildFrameAssessment = (
+  face: FaceEstimate,
+  source: HTMLVideoElement | HTMLCanvasElement,
+): FrameAssessment => {
+  const sourceSize = getSourceSize(source);
+  const bbox = getAbsoluteBoundingBox(face, source, 0);
+  const centerXRatio = (bbox.x + bbox.width / 2) / sourceSize.width;
+  const centerYRatio = (bbox.y + bbox.height / 2) / sourceSize.height;
+  const widthRatio = bbox.width / sourceSize.width;
+  const heightRatio = bbox.height / sourceSize.height;
 
   const leftEye = face.keypoints[0];
   const rightEye = face.keypoints[1];
@@ -236,10 +321,10 @@ const buildFrameAssessment = (face: FaceEstimate, video: HTMLVideoElement): Fram
   const offsetY = Math.abs(centerYRatio - 0.48);
 
   let hint = '';
-  if (widthRatio < 0.15 || heightRatio < 0.2) {
+  if (widthRatio < 0.13 || heightRatio < 0.17) {
     hint = 'Подойдите немного ближе, чтобы лицо заполнило овал.';
-  } else if (widthRatio > 0.3 || heightRatio > 0.42) {
-    hint = 'Отодвиньтесь немного дальше, чтобы в кадре осталось больше фона.';
+  } else if (widthRatio > 0.46 || heightRatio > 0.62) {
+    hint = 'Отодвиньтесь совсем немного, чтобы лицо полностью поместилось в овал.';
   } else if (offsetX > 0.14) {
     hint = 'Сместитесь в центр овала.';
   } else if (centerYRatio < 0.24) {
@@ -254,10 +339,10 @@ const buildFrameAssessment = (face: FaceEstimate, video: HTMLVideoElement): Fram
     offsetX * 1.5 + offsetY * 1.15;
   const rollPenalty = Math.min(1, Math.abs(rollDegrees) / 22);
   const sizePenalty =
-    widthRatio < 0.17
-      ? (0.17 - widthRatio) * 3.2
-      : widthRatio > 0.28
-        ? (widthRatio - 0.28) * 4.2
+    widthRatio < 0.15
+      ? (0.15 - widthRatio) * 3.2
+      : widthRatio > 0.42
+        ? (widthRatio - 0.42) * 3
         : 0;
   const isWellPositioned =
     Math.max(0, 1 - Math.min(0.8, centerPenalty) - rollPenalty * 0.25 - Math.min(0.35, sizePenalty)) >=
@@ -279,6 +364,8 @@ export default function App() {
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const framesRef = useRef<Blob[] | null>(null);
+  const analysisCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const exposureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const processingRef = useRef(false);
   const stableFramesRef = useRef(0);
   const captureLockedRef = useRef(false);
@@ -409,8 +496,9 @@ export default function App() {
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: window.matchMedia('(max-width: 640px)').matches ? 720 : 960 },
+          height: { ideal: window.matchMedia('(max-width: 640px)').matches ? 960 : 720 },
+          aspectRatio: { ideal: window.matchMedia('(max-width: 640px)').matches ? 0.75 : 1.333 },
           facingMode: 'user',
         },
         audio: false,
@@ -492,16 +580,19 @@ export default function App() {
 
     setAppState('capture_in_progress');
     setCurrentPrompt('Подготовка кадров');
-    setLiveHint('Сохраняем серию из 5 полных кадров с небольшим интервалом.');
+    setLiveHint(`Сохраняем серию из ${CAPTURE_COUNT} оптимизированных кадров с небольшим интервалом.`);
     setStatusMessage('Подготавливаем серию кадров.');
 
     for (let index = 0; index < CAPTURE_COUNT; index += 1) {
-      const faces = await detector.estimateFaces(video, { flipHorizontal: false });
+      const analysisCanvas =
+        analysisCanvasRef.current ?? (analysisCanvasRef.current = document.createElement('canvas'));
+      const analysisFrame = prepareDetectionFrame(video, analysisCanvas);
+      const faces = await detector.estimateFaces(analysisFrame, { flipHorizontal: false });
       if (faces.length !== 1) {
         throw new Error('Во время съемки серия кадров прервалась: лицо исчезло из кадра.');
       }
 
-      const assessment = buildFrameAssessment(faces[0], video);
+      const assessment = buildFrameAssessment(faces[0], analysisFrame);
       if (assessment.hint) {
         throw new Error('Во время съемки серия кадров прервалась. Положение лица стало неподходящим.');
       }
@@ -559,20 +650,38 @@ export default function App() {
 
         processingRef.current = true;
         try {
-          const faces = await detector.estimateFaces(video, { flipHorizontal: false });
+          const analysisCanvas =
+            analysisCanvasRef.current ?? (analysisCanvasRef.current = document.createElement('canvas'));
+          const exposureCanvas =
+            exposureCanvasRef.current ?? (exposureCanvasRef.current = document.createElement('canvas'));
+          const exposure = measureExposure(video, exposureCanvas);
+          const analysisFrame = prepareDetectionFrame(video, analysisCanvas);
+          const faces = await detector.estimateFaces(analysisFrame, { flipHorizontal: false });
 
           if (faces.length === 0) {
             stableFramesRef.current = 0;
             setAppState('detecting_face');
-            setStatusMessage('Лицо не обнаружено. Поместите лицо в овал.');
-            setCurrentPrompt('Лицо не обнаружено');
-            setLiveHint('Смотрите в камеру и удерживайте лицо внутри овала.');
+            setStatusMessage(
+              exposure.tooBright
+                ? 'Кадр пересвечен, из-за этого лицо может не фиксироваться.'
+                : 'Лицо не обнаружено. Поместите лицо в овал.',
+            );
+            setCurrentPrompt(exposure.tooBright ? 'Слишком яркий свет' : 'Лицо не обнаружено');
+            setLiveHint(
+              exposure.tooBright
+                ? 'Уберите прямой свет с лица или немного уменьшите яркость экрана.'
+                : exposure.tooDark
+                  ? 'Добавьте мягкий свет перед лицом, чтобы камера лучше видела контур.'
+                  : 'Смотрите в камеру и удерживайте лицо внутри овала.',
+            );
             setMetrics((current) => ({
               ...current,
               faceDetected: false,
               multipleFaces: false,
               faceStateLabel: 'Лицо не обнаружено',
-              positionHint: 'Поместите лицо внутрь овала.',
+              positionHint: exposure.tooBright
+                ? 'Свет должен быть ровным, без белого пятна на лице.'
+                : 'Поместите лицо внутрь овала.',
             }));
             return;
           }
@@ -592,12 +701,12 @@ export default function App() {
             return;
           }
 
-          const assessment = buildFrameAssessment(faces[0], video);
+          const assessment = buildFrameAssessment(faces[0], analysisFrame);
           setMetrics({
             faceDetected: true,
             multipleFaces: false,
             faceStateLabel: assessment.faceLabel,
-            positionHint: assessment.hint,
+            positionHint: assessment.hint || (exposure.tooBright ? 'Уберите прямой свет с лица.' : ''),
           });
 
           if (assessment.hint) {
@@ -611,7 +720,9 @@ export default function App() {
           stableFramesRef.current += 1;
           setCurrentPrompt('Удерживайте лицо в овале');
           setLiveHint(
-            `Стабилизация качества: ${Math.min(stableFramesRef.current, STABLE_FRAME_THRESHOLD)}/${STABLE_FRAME_THRESHOLD}.`,
+            exposure.tooBright
+              ? 'Лицо найдено, но свет слишком яркий. Система попробует выбрать пригодные кадры.'
+              : `Стабилизация качества: ${Math.min(stableFramesRef.current, STABLE_FRAME_THRESHOLD)}/${STABLE_FRAME_THRESHOLD}.`,
           );
           setStatusMessage('Кадр подходит. Еще немного удерживайте лицо, и начнется съемка серии.');
 

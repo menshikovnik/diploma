@@ -95,14 +95,12 @@ export function CameraPanel({
           playsInline
           className="h-full w-full object-cover [transform:scaleX(-1)]"
         />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_35%,_rgba(2,6,23,0.34)_70%,_rgba(2,6,23,0.82)_100%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_33%_36%_at_50%_49%,transparent_0%,transparent_96%,rgba(2,6,23,0.38)_100%)] sm:bg-[radial-gradient(ellipse_20%_36%_at_50%_49%,transparent_0%,transparent_96%,rgba(2,6,23,0.38)_100%)]" />
         <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-slate-950/65 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-slate-950/80 to-transparent" />
-        <div className="absolute inset-0 flex items-center justify-center px-4 py-6 sm:px-6 sm:py-8">
-          <div
-            className={`relative h-[72%] w-[42%] rounded-[999px] border transition-all duration-300 sm:h-[74%] sm:w-[30%] ${frameClass}`}
-          />
-        </div>
+        <div
+          className={`pointer-events-none absolute left-1/2 top-[49%] h-[72%] w-[66%] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border transition-all duration-300 sm:h-[72%] sm:w-[40%] ${frameClass}`}
+        />
 
         {!cameraActive ? (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 px-6 text-center text-sm text-slate-300">

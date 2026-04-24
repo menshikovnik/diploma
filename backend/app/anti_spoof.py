@@ -13,6 +13,7 @@ from uniface.spoofing import MiniFASNet
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("AntiSpoof")
+cv2.setNumThreads(1)
 
 
 class AntiSpoofError(Exception):
@@ -37,11 +38,13 @@ class SilentFaceAntiSpoofing:
         model_dir: Path,
         threshold: float = 0.95,
         min_real_frames: int = 3,
-        debug: bool = True,
+        model_count: int = 1,
+        debug: bool = False,
     ) -> None:
         self.model_dir = model_dir
         self.threshold = threshold
         self.min_real_frames = min_real_frames
+        self.model_count = max(1, min(model_count, 2))
         self.debug = debug
         self.debug_dir = self.model_dir / "debug_crops"
         self.detector: RetinaFace | None = None
@@ -67,7 +70,7 @@ class SilentFaceAntiSpoofing:
                 confidence_threshold=0.6,
                 providers=["CPUExecutionProvider"],
             )
-            self.spoofers = [
+            available_spoofers = [
                 (
                     "MiniFASNet V2",
                     MiniFASNet(
@@ -83,6 +86,7 @@ class SilentFaceAntiSpoofing:
                     ),
                 ),
             ]
+            self.spoofers = available_spoofers[: self.model_count]
         except Exception as exc:
             raise AntiSpoofError(f"Не удалось инициализировать anti-spoof пайплайн: {exc}") from exc
 
@@ -138,8 +142,11 @@ class SilentFaceAntiSpoofing:
 
         faces = self.detector.detect(image, max_num=1, metric="max")
         if not faces:
-            logger.warning("-> RetinaFace не нашел лицо. Возвращаем скор 0.0")
-            return 0.0
+            normalized_image = self._normalize_lighting(image)
+            faces = self.detector.detect(normalized_image, max_num=1, metric="max")
+            if not faces:
+                logger.warning("-> RetinaFace не нашел лицо. Возвращаем скор 0.0")
+                return 0.0
 
         face = faces[0]
         bbox = face.bbox.astype(int).tolist()
@@ -176,3 +183,11 @@ class SilentFaceAntiSpoofing:
         combined_score = float(sum(real_scores) / len(real_scores))
         logger.info("   [Ensemble] combined_real_score=%.4f", combined_score)
         return combined_score
+
+    def _normalize_lighting(self, image: np.ndarray) -> np.ndarray:
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        lightness, channel_a, channel_b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=1.7, tileGridSize=(8, 8))
+        normalized_lightness = clahe.apply(lightness)
+        normalized = cv2.merge((normalized_lightness, channel_a, channel_b))
+        return cv2.cvtColor(normalized, cv2.COLOR_LAB2BGR)

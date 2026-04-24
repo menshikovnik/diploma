@@ -30,6 +30,7 @@ anti_spoof = SilentFaceAntiSpoofing(
     model_dir=settings.model_dir / "anti_spoof",
     threshold=settings.anti_spoof_threshold,
     min_real_frames=settings.anti_spoof_min_real_frames,
+    model_count=settings.anti_spoof_model_count,
 )
 
 app = FastAPI(title="Biometric Face Recognition Service", version="0.1.0")
@@ -64,7 +65,9 @@ async def read_image(upload: UploadFile) -> bytes:
 async def read_images(files: list[UploadFile]) -> list[bytes]:
     if not files:
         raise HTTPException(status_code=400, detail="Кадры не переданы.")
-    return [await read_image(file) for file in files]
+
+    limited_files = files[: settings.max_frames_per_request]
+    return [await read_image(file) for file in limited_files]
 
 
 def raise_api_error(message: str, status_code: int = 400) -> None:
@@ -74,8 +77,9 @@ def raise_api_error(message: str, status_code: int = 400) -> None:
 @app.on_event("startup")
 def on_startup() -> None:
     storage.ensure_ready()
-    anti_spoof.ensure_ready()
-    engine.ensure_ready()
+    if settings.model_warmup_on_startup:
+        anti_spoof.ensure_ready()
+        engine.ensure_ready()
 
 
 @app.get("/api/health", response_model=HealthResponse)

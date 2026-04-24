@@ -10,6 +10,9 @@ import numpy as np
 import torch
 from facenet_pytorch import InceptionResnetV1
 
+cv2.setNumThreads(1)
+torch.set_num_threads(1)
+
 
 class FaceEngineError(Exception):
     pass
@@ -87,7 +90,7 @@ class FaceEngine:
                 str(self.yunet_model_path),
                 "",
                 (320, 320),
-                0.85,
+                0.75,
                 0.3,
                 5000,
             )
@@ -211,12 +214,23 @@ class FaceEngine:
         _, faces = self.detector.detect(image)
 
         if faces is None or len(faces) == 0:
+            _, faces = self.detector.detect(self._normalize_lighting(image))
+
+        if faces is None or len(faces) == 0:
             raise FaceCountError("Лицо не обнаружено.")
 
         if len(faces) > 1:
             raise FaceCountError("В кадре должно быть только одно лицо.")
 
         return faces[0].astype(np.float32)
+
+    def _normalize_lighting(self, image: np.ndarray) -> np.ndarray:
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        lightness, channel_a, channel_b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=1.7, tileGridSize=(8, 8))
+        normalized_lightness = clahe.apply(lightness)
+        normalized = cv2.merge((normalized_lightness, channel_a, channel_b))
+        return cv2.cvtColor(normalized, cv2.COLOR_LAB2BGR)
 
     def _align_face(self, image: np.ndarray, face: np.ndarray) -> np.ndarray:
         landmarks = np.array(

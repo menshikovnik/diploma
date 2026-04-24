@@ -15,6 +15,9 @@ class Settings:
     match_threshold: float
     anti_spoof_threshold: float
     anti_spoof_min_real_frames: int
+    anti_spoof_model_count: int
+    max_frames_per_request: int
+    model_warmup_on_startup: bool
     data_dir: Path
     model_dir: Path
     yunet_model_url: str
@@ -49,7 +52,11 @@ def get_settings() -> Settings:
         ),
         match_threshold=float(os.getenv("MATCH_THRESHOLD", "0.363")),
         anti_spoof_threshold=float(os.getenv("ANTI_SPOOF_THRESHOLD", "0.95")),
-        anti_spoof_min_real_frames=int(os.getenv("ANTI_SPOOF_MIN_REAL_FRAMES", "3")),
+        anti_spoof_min_real_frames=int(os.getenv("ANTI_SPOOF_MIN_REAL_FRAMES", "2")),
+        anti_spoof_model_count=int(os.getenv("ANTI_SPOOF_MODEL_COUNT", "2")),
+        max_frames_per_request=int(os.getenv("MAX_FRAMES_PER_REQUEST", "3")),
+        model_warmup_on_startup=os.getenv("MODEL_WARMUP_ON_STARTUP", "1").lower()
+        in {"1", "true", "yes", "on"},
         data_dir=data_dir,
         model_dir=model_dir,
         yunet_model_url=os.getenv(
